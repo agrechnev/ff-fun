@@ -24,6 +24,28 @@ static void fatal2(const char * msg1, const char * msg2)
     exit(1);
 }
 //=================================================
+// Save the frame to disk as PPM
+static void saveFrame(const AVFrame * pFrame, int width, int height, int ind)
+{
+    char fileName[100];
+
+    sprintf(fileName, "frame%d.ppm", ind);
+
+    FILE * out = fopen(fileName, "wb");
+    if (!out)
+        fatal2("Cannot create file ", fileName);
+
+    // Write PPM header
+    fprintf(out, "P6\n%d %d\n255\n", width, height);
+
+    // Write pixels
+    for (int y=0; y<height; ++y)
+        fwrite(pFrame->data[0] + y*(pFrame->linesize[0]), 1, width*3, out);
+
+    fclose(out);
+}
+
+//=================================================
 
 int main(int argc, char* argv[])
 {
@@ -87,9 +109,9 @@ int main(int argc, char* argv[])
 
     //------------------------------------------------------
     // Now, the frame
-    // Video frame
+    // Video frame, we allocate only frame
     AVFrame * pFrame = av_frame_alloc();
-    // RGB frame
+    // RGB frame, we must allocate frame+buffer
     AVFrame * pFrameRGB = av_frame_alloc();
     if (pFrame==NULL || pFrameRGB==NULL)
         fatal("Cannot allocate frame");
@@ -109,13 +131,17 @@ int main(int argc, char* argv[])
     // Assign appropriate parts of buffer to image planes in pFrameRGB
     // Note that pFrameRGB is an AVFrame, but AVFrame is a superset
     // of AVPicture
-    avpicture_fill((AVPicture *)pFrameRGB, buffer, AV_PIX_FMT_RGB24, frWidth, frHeight);
+    // avpicture_fill((AVPicture *)pFrameRGB, buffer, AV_PIX_FMT_RGB24, frWidth, frHeight);
+
+
+    av_image_fill_arrays(pFrameRGB->data, pFrameRGB->linesize, buffer, AV_PIX_FMT_RGB24, frWidth, frHeight, 1);
+
 //    av_image_fill_arrays()
 
     // Set the SWS context. SWS is the SoftWare Scale library, here apparently we don't change size
     // But recode from the input pixel formal (YUV or whatever) to RGB
     struct SwsContext *swsCtx = sws_getContext(frWidth, frHeight, pCodecCtx->pix_fmt, frWidth, frHeight, AV_PIX_FMT_RGB24,
-                            SWS_BILINEAR, NULL, NULL, NULL);
+                                SWS_BILINEAR, NULL, NULL, NULL);
 
     //------------------------------------------------------
     // Finally, the Big Frame loop, we read a frame and process it
@@ -124,18 +150,61 @@ int main(int argc, char* argv[])
     int frameFinshed; // bool: decoded successfully ?
     AVPacket packet;
 
-    while (av_read_frame(pFormatCtx, &packet) >= 0) {
-        if (packet.stream_index == videoStream) {
-            // Decode video frame
-            avcodec_decode_video2(pCodecCtx, pFrame, &frameFinshed, &packet);
+    while (av_read_frame(pFormatCtx, &packet) >= 0)
+    {
+        if (packet.stream_index == videoStream)
+        {
+            // Decode the video frame
+
+            // Remove the old deprecated function
+//            avcodec_decode_video2(pCodecCtx, pFrame, &frameFinshed, &packet);
+
+
+            if (avcodec_send_packet(pCodecCtx, &packet))
+                fatal("Error in avcodec_send_packet");
+            if (avcodec_receive_frame(pCodecCtx, pFrame))
+                fatal("Error in avcodec_receive_frame");
+
             ++i; // Increase frame count
 
 
+            // Rescale the frame to the RGB format (the actual scale does not change)
+            sws_scale(swsCtx, (uint8_t const * const *)pFrame->data, pFrame->linesize, 0,
+                      frHeight, pFrameRGB->data, pFrameRGB->linesize);
+
+
+            if (i>=100 && i<=110)
+            {
+                // Save frame to disk as a ppm file
+                saveFrame(pFrameRGB, frWidth, frHeight, i);
+            }
+
+
         }
+
+        // Free the packet allocated by av_read_frame()
+//        av_free_packet(&packet);
+        av_packet_unref(&packet);
     }
 
 
     puts("Goblins are finishing !");
+
+    // Free the frames
+    av_free(buffer);
+    av_frame_free(&pFrameRGB);
+    av_frame_free(&pFrame);
+
+    // Close the codecs
+    avcodec_close(pCodecCtx);
+
+
+    // Aparanetly this is NOT needed, causes avformat_close_input to crash
+//    avcodec_parameters_free(&pCodecPar);
+
+
+    // Close the video file
+    avformat_close_input(&pFormatCtx);
 
     return 0;
 }
