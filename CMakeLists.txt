@@ -23,3 +23,4 @@ set(FF_LIBS
 add_subdirectory(tut)
 add_subdirectory(fun1)
 add_subdirectory(fun2)
+add_subdirectory(funcv)
