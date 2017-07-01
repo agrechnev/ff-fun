@@ -1,3 +1,4 @@
+#include <iostream>
 
 #include "fatal.h"
 
@@ -42,7 +43,7 @@ VDecoder::VDecoder(int width, int height) :
 //=======================================
 VDecoder::~VDecoder()
 {
-    // Free things
+    // Free stuff
     av_parser_close(pParser);
     av_frame_free(&pFrame);
     av_packet_free(&pPkt);
@@ -52,7 +53,38 @@ VDecoder::~VDecoder()
 
 void VDecoder::parse(void *inData, size_t inSize, std::function<void (void *, void *, void *)> callBack)
 {
+    using namespace std;
+    // Loop over frames
+    while (inSize > 0) {
+        int ret = av_parser_parse2(pParser, pCtx, &pPkt->data, &pPkt->size,
+                                   (uint8_t *)inData, inSize, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
+        if (ret < 0)
+            fatal("VDecoder: Parse error.");
+        inData += ret;
+        inSize -= ret;
 
+        if (pPkt->size > 0)
+            decode(callBack);  // Decode frame
+    }
+}
+//=======================================
+
+void VDecoder::decode(std::function<void (void *, void *, void *)> callBack)
+{
+    using namespace std;
+
+    if (avcodec_send_packet(pCtx, pPkt) < 0)
+        fatal("VDecoder: Error in avcodec_send_packet.");
+
+    for (;;){ // Runs only once for me in reality
+        int ret = avcodec_receive_frame(pCtx, pFrame);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+            break;
+        else if (ret < 0)
+            fatal("VDecoder::decoding error.");
+
+        callBack(pFrame->data[0], pFrame->data[1], pFrame->data[2]); // 3 parts of the YUV420p data
+    }
 }
 //=======================================
 

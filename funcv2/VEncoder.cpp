@@ -46,9 +46,12 @@ VEncoder::VEncoder(int width, int height) :
     pCtx->max_b_frames = 1;
     pCtx->pix_fmt = AV_PIX_FMT_YUV420P;
 
-    // WTF is this really? I guess I'll need "ultrafast" later
-    if (pCodec->id == AV_CODEC_ID_H264)
+    if (pCodec->id == AV_CODEC_ID_H264) {
+        // Is "fast" actually fast enough?
         av_opt_set(pCtx->priv_data, "preset", "fast", 0);
+        // tune=zerolatency is absolutely crucial for our problem
+        av_opt_set(pCtx->priv_data, "tune", "zerolatency", 0);
+    }
 
     // Time to open the codec
     if (avcodec_open2(pCtx, pCodec, NULL) < 0)
@@ -69,12 +72,7 @@ VEncoder::VEncoder(int width, int height) :
 //=================================================
 VEncoder::~VEncoder()
 {
-
-
-    // Flush the encoder
-//    encode(NULL);
-
-    // Free things
+    // Free stuff
     av_frame_free(&pFrame);
     av_packet_free(&pPkt);
     avcodec_free_context(&pCtx);
@@ -84,11 +82,10 @@ VEncoder::~VEncoder()
 int VEncoder::writeYUV(const uint8_t *data, void * dest, size_t maxSize)
 {
     fflush(stdout);
-
+    fflush(stderr);
     // Make sure data is writable, why ?
     if (av_frame_make_writable(pFrame) < 0)
         fatal("av_frame_make_writable() failed.");
-
 
     const size_t size0 = height*width/4;
 
@@ -96,8 +93,8 @@ int VEncoder::writeYUV(const uint8_t *data, void * dest, size_t maxSize)
     memcpy(pFrame->data[1], data + size0*4, size0);  // Cb
     memcpy(pFrame->data[2], data + size0*5, size0);  // Cr
 
-    // Seems to work just fine without any timestamp
-    //pFrame->pts = i
+    // Set timestamp
+    pFrame->pts = framePTS++;
 
     // Encode the image
     return encode(pFrame, dest, maxSize);

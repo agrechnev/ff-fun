@@ -10,7 +10,7 @@ extern "C" {
 
 class VDecoder
 {
-public:
+public: //================ Methods
     /// Constructor
     VDecoder(int width, int height);
     /// Destructor
@@ -19,11 +19,14 @@ public:
     /// Parse the input data into frames and call a callback with the YUV data for each one
     void parse(void *inData, size_t inSize, std::function<void(void*, void*, void*)> callBack);
 
-    // Ban copy and assignment
+    // Delete copy and assignment
     VDecoder(const VDecoder &) = delete;
     VDecoder & operator= (const VDecoder &) = delete;
 
-private: // Data
+private: //================ Methods
+    /// Decode a frame and call the callback
+    void decode(std::function<void(void*, void*, void*)> callBack);
+private: //============= Data
     /// Image width
     int width;
     /// Image height

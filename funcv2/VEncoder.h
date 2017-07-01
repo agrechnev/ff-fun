@@ -42,4 +42,5 @@ private: //======= Data
     AVCodecContext *pCtx;
     AVPacket * pPkt;
     AVFrame * pFrame;
+    int framePTS = 0;
 };
