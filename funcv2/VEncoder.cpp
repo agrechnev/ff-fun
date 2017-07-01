@@ -1,10 +1,13 @@
 #include <cstring>
+#include <cstdlib>
 
-#include "VCoder.h"
+#include "fatal.h"
+
+#include "VEncoder.h"
 
 //=================================================
 
-VCoder::VCoder(int width, int height) :
+VEncoder::VEncoder(int width, int height) :
     width(width),
     height(height)
 {
@@ -12,15 +15,15 @@ VCoder::VCoder(int width, int height) :
 
     pCodec = avcodec_find_encoder(AV_CODEC_ID_H264);
     if (!pCodec)
-        fatal("Cannot find codec.");
+        fatal("VEncoder: Cannot find codec.");
 
     pCtx = avcodec_alloc_context3(pCodec);
     if (!pCtx)
-        fatal("Cannot allocate codec context.");
+        fatal("VEncoder: Cannot allocate codec context.");
 
     pPkt = av_packet_alloc();
     if (!pPkt)
-        fatal("Cannot allocate packet.");
+        fatal("VEncoder: Cannot allocate packet.");
 
     // Sample parameters. Evil !
 //    pCtx->bit_rate = 400000;
@@ -49,12 +52,12 @@ VCoder::VCoder(int width, int height) :
 
     // Time to open the codec
     if (avcodec_open2(pCtx, pCodec, NULL) < 0)
-        fatal("Cannot open codec.");
+        fatal("VEncoder: Cannot open codec.");
 
     // Create frame
     pFrame = av_frame_alloc();
     if (!pFrame)
-        fatal("Cannot allocate frame.");
+        fatal("VEncoder: Cannot allocate frame.");
 
     pFrame->format = pCtx->pix_fmt;
     pFrame->width = width;
@@ -64,7 +67,7 @@ VCoder::VCoder(int width, int height) :
         fatal("Cannot allocate frame buffer.");
 }
 //=================================================
-VCoder::~VCoder()
+VEncoder::~VEncoder()
 {
 
 
@@ -76,44 +79,9 @@ VCoder::~VCoder()
     av_packet_free(&pPkt);
     avcodec_free_context(&pCtx);
 }
-//=================================================
-void VCoder::writeSample()
-{
-    uint8_t buf[2*width*height];
-
-    // The main loop
-    for (int i = 0; i < 25 ; ++i)
-    {
-
-        // Create a dummy image
-        // Y
-        for (int y = 0; y < height; ++y)
-            for (int x = 0; x < width; ++x)
-//                pFrame->data[0][y*pFrame->linesize[0] + x] = x + y + i*3;
-                buf[y*pFrame->linesize[0] + x] = x + y + i*3;
-
-        // Cb and Cr
-
-        for (int y = 0; y < height/2; ++y)
-            for (int x = 0; x < width/2; ++x)
-            {
-//                pFrame->data[1][y*pFrame->linesize[1] + x] = 128 + y + i*2;
-//                pFrame->data[2][y*pFrame->linesize[2] + x] = ;
-
-                buf[width*height     + y*pFrame->linesize[1] + x] = 128 + y + i*2;
-                buf[width*height*5/4 + y*pFrame->linesize[2] + x] = 64 + x + i*5;
-            }
-
-
-        writeYUV(buf);
-    }
-
-
-}
-
 
 //=================================================
-void VCoder::writeYUV(const uint8_t* data)
+int VEncoder::writeYUV(const uint8_t *data, void * dest, size_t maxSize)
 {
     fflush(stdout);
 
@@ -132,31 +100,46 @@ void VCoder::writeYUV(const uint8_t* data)
     //pFrame->pts = i
 
     // Encode the image
-    encode(pFrame);
+    return encode(pFrame, dest, maxSize);
 }
 
 //=================================================
-void VCoder::encode(AVFrame* pF)
+int VEncoder::encode(AVFrame* pF, void * dest, size_t maxSize)
 {
+    using namespace std;
+
     // Send frame to the encoder
     if (avcodec_send_frame(pCtx, pF) < 0)
         fatal("avcodec_send_frame() failed.");
+
+    size_t totalSize = 0;
 
     for (;;)
     {
         // Receive packet
         int ret = avcodec_receive_packet(pCtx, pPkt);
 
+        // Note: in my experience sending a frame either
+        // gives you 0 packets (first few frames)
+        // or exactly 1 packet, never more
+        // But I did it by the book anyway
+
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-            return;
+            break;
         else if (ret< 0 )
             fatal("Cannot encode.");
 
-        // Write to the file
-        fwrite(pPkt->data, 1, pPkt->size, pFile);
+        if (totalSize + pPkt->size <= maxSize) {
+            // Copy data to destination
+            memcpy(dest, pPkt->data, pPkt->size);
+            totalSize += pPkt->size;
+            dest += pPkt->size;
+        }
+
         // Wipe the packet clean
         av_packet_unref(pPkt);
     }
 
+    return totalSize;
 }
 

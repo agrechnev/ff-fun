@@ -17,7 +17,8 @@ include_directories( ${OpenCV_INCLUDE_DIRS} )
 
 set(SRCS
     main.cpp
-    VCoder.cpp VCoder.h
+    VEncoder.cpp VEncoder.h
+    VDecoder.cpp VDecoder.h
     fatal.h
 )
 
