@@ -48,7 +48,7 @@ VEncoder::VEncoder(int width, int height) :
 
     if (pCodec->id == AV_CODEC_ID_H264) {
         // Is "fast" actually fast enough?
-        av_opt_set(pCtx->priv_data, "preset", "fast", 0);
+        av_opt_set(pCtx->priv_data, "preset", "ultrafast", 0);
         // tune=zerolatency is absolutely crucial for our problem
         av_opt_set(pCtx->priv_data, "tune", "zerolatency", 0);
     }

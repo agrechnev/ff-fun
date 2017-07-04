@@ -19,6 +19,12 @@ int main(){
     VDecoder vdec(CAMERA_WIDTH, CAMERA_HEIGHT); // Decoder
 
     VideoCapture cam(0);
+    if (!cam.isOpened()) {
+    	cerr << "Cannot init camera !" << endl;
+    	return -1;
+    }
+    
+    
     Mat frameIn, frameInYuv; // In Frames
     Mat frameOut; // Out Frames
     Mat frameOutYuv(CAMERA_HEIGHT*3/2, CAMERA_WIDTH, CV_8UC1); // Pre-allocate the YUV frame
@@ -34,7 +40,11 @@ int main(){
         imshow("frameIn", frameIn);
         cvtColor(frameIn, frameInYuv, CV_BGR2YUV_I420); // Convert to YUV420p
         // Encode to H264
+        int64 t1 = getTickCount(); // Start timer
         int packetSize = venc.writeYUV((uint8_t *)frameInYuv.data, buffer, BUFFER_SIZE);
+        double duration = (getTickCount() - t1)/getTickFrequency();
+        cout << "Encode : " << duration << endl;
+        
         if (packetSize > 0) {
             vdec.parse(buffer, packetSize,
                        [&frameOut, &frameOutYuv, CAMERA_WIDTH, CAMERA_HEIGHT]
