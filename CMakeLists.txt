@@ -4,10 +4,6 @@ project (ff-fun)
 set (CMAKE_CXX_STANDARD 14)
 set (CMAKE_C_STANDARD 11)
 
-IF(NOT CMAKE_BUILD_TYPE )
-   SET( CMAKE_BUILD_TYPE "Debug" )
-ENDIF()
-
 # Find cmake libraries
 # avformat would be enough for linux, need all 3 in mingw for some reason
 find_package(PkgConfig REQUIRED)
@@ -31,6 +27,7 @@ endif()
 
 MESSAGE(STATUS "FF_LIBS = ${FF_LIBS}")
 
+add_subdirectory(play1)
 add_subdirectory(fun1)
 add_subdirectory(fun2)
 add_subdirectory(funcv)
