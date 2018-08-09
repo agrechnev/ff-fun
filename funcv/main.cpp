@@ -30,7 +30,7 @@ int main(){
 
         imshow("IdiotYUV", yuv);
 
-        if (waitKey(1) == 'q')
+        if (27 == waitKey(1))
             break;
     }
 

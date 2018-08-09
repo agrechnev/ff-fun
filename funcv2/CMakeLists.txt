@@ -1,15 +1,8 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.1)
 project (funcv2)
 
 set (CMAKE_CXX_STANDARD 14)
-#set (CMAKE_C_STANDARD 11)
-
-
-if(WIN32)
- set(OpenCV_DIR d:/opencv)
-else()
- set(OpenCV_DIR  ~/opencv3/share/OpenCV)
-endif()
+set (CMAKE_C_STANDARD 11)
 
 
 find_package( OpenCV REQUIRED )

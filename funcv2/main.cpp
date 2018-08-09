@@ -66,7 +66,7 @@ int main(){
 
         }
 
-        if (waitKey(1) == 'q')
+        if (27 == waitKey(1))
             break;
     }
 //    fclose(pFile);

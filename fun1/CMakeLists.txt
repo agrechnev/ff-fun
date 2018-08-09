@@ -1,7 +1,7 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.1)
 project (fun1)
 
-#set (CMAKE_CXX_STANDARD 14)
+set (CMAKE_CXX_STANDARD 14)
 set (CMAKE_C_STANDARD 11)
 
 set(SRCS

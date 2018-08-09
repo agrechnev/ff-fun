@@ -52,7 +52,7 @@ int main(int argc, char* argv[])
     puts("Goblin fun with ffmpeg:");
 
     // File name + default
-    char fileName[500] = "/home/kaa-dev/grechnyev/stream/media-samp/Suteki.mp4";
+    char fileName[500] = "/home/seymour/Videos/suteki.mp4";
 
     if (argc > 1 && strlen(argv[1]) < 500)
     {
@@ -173,7 +173,8 @@ int main(int argc, char* argv[])
                       frHeight, pFrameRGB->data, pFrameRGB->linesize);
 
 
-            if (i>=100 && i<=110)
+            // Save frames 100, 110, ..., 200
+            if (i>=100 && i<=200 && 0 == i % 10)
             {
                 // Save frame to disk as a ppm file
                 saveFrame(pFrameRGB, frWidth, frHeight, i);
