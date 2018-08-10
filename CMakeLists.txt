@@ -31,6 +31,9 @@ endif()
 MESSAGE(STATUS "FF_LIBS = ${FF_LIBS}")
 
 add_subdirectory(play1)
+add_subdirectory(play2)
+
+# OLD examples
 add_subdirectory(fun1)
 add_subdirectory(fun2)
 add_subdirectory(funcv)

@@ -3,8 +3,7 @@
 //
 
 // A prototype video player - a simple ffmpeg example
-// This version is close in spirit to the "OLD" tutorial by ???
-// But I use some C++ and OPenCV for visualization
+// This version uses OpenCV YUV -> BGR conversion, no swscale, no frameRGB
 // No classes yet
 
 #include <iostream>
@@ -17,7 +16,6 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/imgutils.h>
-#include <libswscale/swscale.h>
 }
 
 using namespace std;
@@ -34,9 +32,9 @@ static string deFourCC(uint32_t tag) {
 }
 
 int main(int argc, char **argv) {
-    cout << "PLAY 1 : A prototype video player" << endl;
+    cout << "PLAY 2 : A prototype video player" << endl;
 
-    string fileName("/home/seymour/Videos/suteki.mp4");
+    string fileName("/home/seymour/Videos/suteki.webm");
     if (argc > 1)
         fileName = argv[1];
 
@@ -74,13 +72,11 @@ int main(int argc, char **argv) {
     if (-1 == videoStream)
         throw runtime_error("No video stream !");
 
-
-
     // Get codec parameters
     AVCodecParameters *pCodecPar = pFormatCtx->streams[videoStream]->codecpar;
 
     //------------- CODEC, decoder
-    cout << "Video codec ID = " << pCodecPar->codec_id << ", H264 = " << AV_CODEC_ID_H264 << endl;
+    cout << "Video codec ID = " << pCodecPar->codec_id << ", H264 = " << AV_CODEC_ID_H264 << ", AV_CODEC_ID_VP8 = " <<  AV_CODEC_ID_VP8 << endl;
 
     // Find decoder
     AVCodec *pCodec = avcodec_find_decoder(pCodecPar->codec_id);
@@ -102,7 +98,6 @@ int main(int argc, char **argv) {
     if (avcodec_open2(pCodecCtx, pCodec, nullptr) < 0)
         throw runtime_error("avcodec_open2() failure");
 
-
     //------------- FRAME
 
     // Frame size
@@ -116,29 +111,13 @@ int main(int argc, char **argv) {
     // YUV (I guess) frame
     AVFrame *pFrame = av_frame_alloc();
 
-    // RGB frame + buffer
-    // Note : we don't really need RGB frame or buffer or swscale if we use OpenCV
-    // As we can use OpenCV for YUV<->BGR (or RGB) conversion
-    // I'll get rid of it in the next example
-    AVFrame *pFrameRGB = av_frame_alloc();
-    if (!pFrame || !pFrameRGB)
-        throw runtime_error("av_frame_alloc() failure");
-    uint8_t *buffer = (uint8_t *) av_malloc(bufSize * sizeof(uint8_t));
-    if (!buffer)
-        throw runtime_error("av_malloc() failure");
-    if (av_image_fill_arrays(pFrameRGB->data, pFrameRGB->linesize, buffer, AV_PIX_FMT_RGB24, frWidth, frHeight, 1) < 0)
-        throw runtime_error("av_image_fill_arrays() failure");
-
-    // SWS context
-    struct SwsContext *swsCtx = sws_getContext(frWidth, frHeight, pCodecCtx->pix_fmt, frWidth, frHeight,
-                                               AV_PIX_FMT_RGB24, SWS_BILINEAR, nullptr, nullptr, nullptr);
-    if (!swsCtx)
-        throw runtime_error("sws_getContext() failure");
+    // Input pixel format
+    cout << "pixfmt = " << pCodecCtx->pix_fmt << endl;
 
     //------------- FINALLY, THE GAME LOOP !
     AVPacket packet;
-    Mat imgRGB(frHeight, frWidth, CV_8UC3); // Opencv images (preallocate !)
-    Mat img(frHeight, frWidth, CV_8UC3);
+    Mat imgYUV(frHeight * 3 / 2, frWidth, CV_8UC1); // Opencv YUV frame (must preallocate !)
+    Mat img(frHeight, frWidth, CV_8UC3); // OpenCV BGR frame
     int frameCount = 0;
     bool stopFlag = false;
     while (!stopFlag) {
@@ -147,37 +126,47 @@ int main(int argc, char **argv) {
             throw runtime_error("av_read_frame() failure");
 //        cout << "PACKET : index = " << packet.stream_index << endl;
         // We can receive both audio and video here, select the video !
-        if (packet.stream_index != videoStream)
-            continue;
+        if (packet.stream_index == videoStream) {
+            // Send it to the decoder
+            if (avcodec_send_packet(pCodecCtx, &packet))
+                throw runtime_error("avcodec_send_packet() failure");
 
-        // Send it to the decoder
-        if (avcodec_send_packet(pCodecCtx, &packet))
-            throw runtime_error("avcodec_send_packet() failure");
+            // Receive frames decoded from the packet, can be 0, 1 or more per packet
+            // That is why fun1 failed with webm !
+            for (;;) {
+                int err = avcodec_receive_frame(pCodecCtx, pFrame);
+                if (err == AVERROR(EAGAIN))  // No more frames for now
+                    break;
+                else if (err)
+                    throw runtime_error("avcodec_receive_frame() failure, err = " + to_string(err));
 
-        // Receive frames decoded from the packet, can be 0, 1 or more per packet
-        // That is why fun1 failed with webm !
-        for (;;) {
-            int err = avcodec_receive_frame(pCodecCtx, pFrame);
-            if (err == AVERROR(EAGAIN))  // No more frames for now
-                break;
-            else if (err)
-                throw runtime_error("avcodec_receive_frame() failure, err = " + to_string(err));
-
-            ++frameCount;
+                ++frameCount;
 //            cout << "FRAME " << frameCount << endl;
 
-            // Rescale the frame to RGB with SWS
-            sws_scale(swsCtx, (uint8_t const * const *) pFrame->data, pFrame->linesize, 0, frHeight, pFrameRGB->data, pFrameRGB->linesize);
+                // Copy YUV data from pFrame to the pre-allocated imgYUV
+                // STUPID STUPID linesizes !!!
+                size_t size0 = (size_t) (frWidth * frHeight / 4);
+                for (int i = 0; i < frHeight; ++i) {
+                    memcpy(imgYUV.data + frWidth * i, pFrame->data[0] + i * pFrame->linesize[0], frWidth);
+                }
+                for (int i = 0; i < frHeight / 2; ++i) {
+                    memcpy(imgYUV.data + 4 * size0 + frWidth * i / 2, pFrame->data[1] + i * pFrame->linesize[1],
+                           frWidth/2);
+                    memcpy(imgYUV.data + 5 * size0 + frWidth * i / 2, pFrame->data[2] + i * pFrame->linesize[2],
+                           frWidth/2);
+                }
 
-            // Display the frame with OpenCV
-            memcpy(imgRGB.data, *pFrameRGB->data, (size_t)bufSize);
-            cvtColor(imgRGB, img, COLOR_RGB2BGR);
-            imshow("img", img);
-            if (27 == waitKey(1)) {
-                stopFlag = true;
-                break;
+//                imshow("imgYUV", imgYUV);
+
+                // Convert the imgYUV to BGR and display with OpenCV
+                cvtColor(imgYUV, img, COLOR_YUV2BGR_I420);
+                imshow("img", img);
+                if (27 == waitKey(1)) {
+                    stopFlag = true;
+                    break;
+                }
+                this_thread::sleep_for(chrono::milliseconds(38)); // Delay
             }
-            this_thread::sleep_for(chrono::milliseconds(38)); // Delay
         }
         // Free the packet
         av_packet_unref(&packet);
@@ -188,8 +177,6 @@ int main(int argc, char **argv) {
     cout << "\nSHUTTING DOWN !\n" << endl;
 
     // Close frames
-    av_free(buffer);
-    av_frame_free(&pFrameRGB);
     av_frame_free(&pFrame);
 
     // Close context
