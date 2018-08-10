@@ -3,10 +3,15 @@
 //
 
 // A prototype video player - a simple ffmpeg example
+// This version is close in spirit to the "OLD" tutorial by ???
+// But I use some C++ and OPenCV for visualization
+// No classes yet
 
 #include <iostream>
 #include <thread>
 #include <chrono>
+
+#include <opencv2/opencv.hpp>
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -16,9 +21,10 @@ extern "C" {
 }
 
 using namespace std;
+using namespace cv;
 
 /// Stringify the four-cc
-string deFourCC(uint32_t tag){
+static string deFourCC(uint32_t tag) {
     string s;
     for (int i = 0; i < 4; ++i) {
         s += (char) (tag & 0xff);
@@ -27,8 +33,7 @@ string deFourCC(uint32_t tag){
     return s;
 }
 
-
-int main(int argc, char ** argv){
+int main(int argc, char **argv) {
     cout << "PLAY 1 : A prototype video player" << endl;
 
     string fileName("/home/seymour/Videos/suteki.mp4");
@@ -39,7 +44,7 @@ int main(int argc, char ** argv){
     av_register_all();
 
     // Open the video file
-    AVFormatContext * pFormatCtx = nullptr;
+    AVFormatContext *pFormatCtx = nullptr;
     if (avformat_open_input(&pFormatCtx, fileName.c_str(), nullptr, nullptr) != 0)
         throw runtime_error("Error opening file " + fileName);
 
@@ -72,13 +77,13 @@ int main(int argc, char ** argv){
 
 
     // Get codec parameters
-    AVCodecParameters * pCodecPar = pFormatCtx->streams[videoStream]->codecpar;
+    AVCodecParameters *pCodecPar = pFormatCtx->streams[videoStream]->codecpar;
 
     //------------- CODEC, decoder
-    cout << "Video codec ID = " << pCodecPar->codec_id << ", H264 = " <<  AV_CODEC_ID_H264 << endl;
+    cout << "Video codec ID = " << pCodecPar->codec_id << ", H264 = " << AV_CODEC_ID_H264 << endl;
 
     // Find decoder
-    AVCodec * pCodec = avcodec_find_decoder(pCodecPar->codec_id);
+    AVCodec *pCodec = avcodec_find_decoder(pCodecPar->codec_id);
     if (nullptr == pCodec)
         throw runtime_error("Cannot find decoder !");
 
@@ -87,7 +92,7 @@ int main(int argc, char ** argv){
     cout << "long_name = " << pCodec->long_name << endl;
 
     // Create context
-    AVCodecContext * pCodecCtx = avcodec_alloc_context3(pCodec);
+    AVCodecContext *pCodecCtx = avcodec_alloc_context3(pCodec);
     if (nullptr == pCodecCtx)
         throw runtime_error("avcodec_alloc_context3() failure");
     if (avcodec_parameters_to_context(pCodecCtx, pCodecPar) < 0)
@@ -106,16 +111,86 @@ int main(int argc, char ** argv){
     cout << "width = " << frWidth << ", height = " << frHeight << endl;
     // RGB Buffer size (actually width*height*3)
     int bufSize = av_image_get_buffer_size(AV_PIX_FMT_RGB24, frWidth, frHeight, 1);
-    cout << "bufSize = " << bufSize << " = " << frWidth*frHeight*3 << endl;
+    cout << "bufSize = " << bufSize << " = " << frWidth * frHeight * 3 << endl;
 
     // YUV (I guess) frame
-    AVFrame * pFrame = av_frame_alloc();
+    AVFrame *pFrame = av_frame_alloc();
+
     // RGB frame + buffer
-    AVFrame * pFrameRGB = av_frame_alloc();
+    // Note : we don't really need RGB frame or buffer or swscale if we use OpenCV
+    // As we can use OpenCV for YUV<->BGR (or RGB) conversion
+    // I'll get rid of it in the next example
+    AVFrame *pFrameRGB = av_frame_alloc();
+    if (!pFrame || !pFrameRGB)
+        throw runtime_error("av_frame_alloc() failure");
+    uint8_t *buffer = (uint8_t *) av_malloc(bufSize * sizeof(uint8_t));
+    if (!buffer)
+        throw runtime_error("av_malloc() failure");
+    if (av_image_fill_arrays(pFrameRGB->data, pFrameRGB->linesize, buffer, AV_PIX_FMT_RGB24, frWidth, frHeight, 1) < 0)
+        throw runtime_error("av_image_fill_arrays() failure");
+
+    // SWS context
+    struct SwsContext *swsCtx = sws_getContext(frWidth, frHeight, pCodecCtx->pix_fmt, frWidth, frHeight,
+                                               AV_PIX_FMT_RGB24, SWS_BILINEAR, nullptr, nullptr, nullptr);
+    if (!swsCtx)
+        throw runtime_error("sws_getContext() failure");
+
+    //------------- FINALLY, THE GAME LOOP !
+    AVPacket packet;
+    Mat imgRGB(frHeight, frWidth, CV_8UC3); // Opencv images (preallocate !)
+    Mat img(frHeight, frWidth, CV_8UC3);
+    int frameCount = 0;
+    bool stopFlag = false;
+    while (!stopFlag) {
+        // Read a packet (usually one frame ?) from the stream
+        if (av_read_frame(pFormatCtx, &packet) < 0)
+            throw runtime_error("av_read_frame() failure");
+//        cout << "PACKET : index = " << packet.stream_index << endl;
+        // We can receive both audio and video here, select the video !
+        if (packet.stream_index != videoStream)
+            continue;
+
+        // Send it to the decoder
+        if (avcodec_send_packet(pCodecCtx, &packet))
+            throw runtime_error("avcodec_send_packet() failure");
+
+        // Receive frames decoded from the packet, can be 0, 1 or more per packet
+        // That is why fun1 failed with webm !
+        for (;;) {
+            int err = avcodec_receive_frame(pCodecCtx, pFrame);
+            if (err == AVERROR(EAGAIN))  // No more frames for now
+                break;
+            else if (err)
+                throw runtime_error("avcodec_receive_frame() failure, err = " + to_string(err));
+
+            ++frameCount;
+//            cout << "FRAME " << frameCount << endl;
+
+            // Rescale the frame to RGB with SWS
+            sws_scale(swsCtx, (uint8_t const * const *) pFrame->data, pFrame->linesize, 0, frHeight, pFrameRGB->data, pFrameRGB->linesize);
+
+            // Display the frame with OpenCV
+            memcpy(imgRGB.data, *pFrameRGB->data, (size_t)bufSize);
+            cvtColor(imgRGB, img, COLOR_RGB2BGR);
+            imshow("img", img);
+            if (27 == waitKey(1)) {
+                stopFlag = true;
+                break;
+            }
+            this_thread::sleep_for(chrono::milliseconds(38)); // Delay
+        }
+        // Free the packet
+        av_packet_unref(&packet);
+    }
 
     //------------- SHUTDOWN
 
     cout << "\nSHUTTING DOWN !\n" << endl;
+
+    // Close frames
+    av_free(buffer);
+    av_frame_free(&pFrameRGB);
+    av_frame_free(&pFrame);
 
     // Close context
     avcodec_free_context(&pCodecCtx);

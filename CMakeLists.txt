@@ -4,8 +4,11 @@ project (ff-fun)
 set (CMAKE_CXX_STANDARD 14)
 set (CMAKE_C_STANDARD 11)
 
-# Find cmake libraries
-# avformat would be enough for linux, need all 3 in mingw for some reason
+# OpenCV
+find_package( OpenCV REQUIRED )
+include_directories( ${OpenCV_INCLUDE_DIRS} )
+
+# ffmpeg
 find_package(PkgConfig REQUIRED)
 pkg_search_module(AVFORMAT required libavformat)
 pkg_search_module(AVCODEC required libavcodec)

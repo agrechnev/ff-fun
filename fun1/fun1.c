@@ -160,6 +160,10 @@ int main(int argc, char* argv[])
 //            avcodec_decode_video2(pCodecCtx, pFrame, &frameFinshed, &packet);
 
 
+            // Note : in principle, there can be 0 , 1 or more frames per packet
+            // Is this why this code fails on webm ?
+            // See play1 for the correct version
+
             if (avcodec_send_packet(pCodecCtx, &packet))
                 fatal("Error in avcodec_send_packet");
             if (avcodec_receive_frame(pCodecCtx, pFrame))
