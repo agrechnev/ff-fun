@@ -24,7 +24,7 @@ int main(){
         imshow("Idiot", frame);
 
 //        cvtColor(frame, yuv, CV_BGR2YUV_I420);
-        cvtColor(frame, yuv, CV_BGR2YUV_I420);
+        cvtColor(frame, yuv, COLOR_BGR2YUV_I420);
 
         vw.writeYUV((uint8_t *)yuv.data);
 

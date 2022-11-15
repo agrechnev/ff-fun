@@ -34,7 +34,7 @@ static string deFourCC(uint32_t tag) {
 int main(int argc, char **argv) {
     cout << "PLAY 2 : A prototype video player" << endl;
 
-    string fileName("/home/seymour/Videos/suteki.webm");
+    string fileName("/home/seymour/Videos/tvoya.mp4");
     if (argc > 1)
         fileName = argv[1];
 

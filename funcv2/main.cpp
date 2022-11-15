@@ -38,7 +38,7 @@ int main(){
     for (;;){
         cam.read(frameIn);  // Read a frame
         imshow("frameIn", frameIn);
-        cvtColor(frameIn, frameInYuv, CV_BGR2YUV_I420); // Convert to YUV420p
+        cvtColor(frameIn, frameInYuv, COLOR_BGR2YUV_I420); // Convert to YUV420p
         // Encode to H264
         int64 t1 = getTickCount(); // Start timer
         int packetSize = venc.writeYUV((uint8_t *)frameInYuv.data, buffer, BUFFER_SIZE);
@@ -55,7 +55,7 @@ int main(){
                 memcpy(frameOutYuv.data + size0*4, d1, size0);
                 memcpy(frameOutYuv.data + size0*5, d2, size0);
 
-                cvtColor(frameOutYuv, frameOut, CV_YUV2BGR_I420); // Convert YUV420p to BGR
+                cvtColor(frameOutYuv, frameOut, COLOR_YUV2BGR_I420); // Convert YUV420p to BGR
                 imshow("frameOut", frameOut);
 
                 // Will need it here if no other waitKey

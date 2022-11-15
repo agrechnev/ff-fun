@@ -36,8 +36,8 @@ static string deFourCC(uint32_t tag) {
 int main(int argc, char **argv) {
     cout << "PLAY 1 : A prototype video player" << endl;
 
-//    string fileName("/home/seymour/Videos/suteki.mp4");
-    string fileName("rtsp://b1.dnsdojo.com:1935/live/sys3.stream");
+   string fileName("/home/seymour/Videos/suteki.mp4");
+//     string fileName("rtsp://b1.dnsdojo.com:1935/live/sys3.stream");
 
 
     if (argc > 1)
@@ -178,7 +178,7 @@ int main(int argc, char **argv) {
                 memcpy(imgRGB.data, *pFrameRGB->data, (size_t) bufSize);
                 cvtColor(imgRGB, img, COLOR_RGB2BGR);
                 imshow("img", img);
-                if (27 == waitKey(1)) {
+                if (27 == waitKey(20)) {
                     stopFlag = true;
                     break;
                 }
