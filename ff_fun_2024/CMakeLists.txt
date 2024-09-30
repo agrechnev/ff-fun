@@ -32,3 +32,6 @@ target_link_libraries (fun2_encode ${FF_LIBS} ${OpenCV_LIBS})
 
 add_executable(fun3_encode fun3_encode.cpp)
 target_link_libraries (fun3_encode ${FF_LIBS} ${OpenCV_LIBS})
+
+add_executable(fun4_encode_write fun4_encode_write.cpp)
+target_link_libraries (fun4_encode_write ${FF_LIBS} ${OpenCV_LIBS})
