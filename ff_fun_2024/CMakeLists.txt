@@ -26,3 +26,9 @@ add_subdirectory(play1)
 
 add_executable(fun1 fun1.cpp)
 target_link_libraries (fun1 ${FF_LIBS} ${OpenCV_LIBS})
+
+add_executable(fun2_encode fun2_encode.cpp)
+target_link_libraries (fun2_encode ${FF_LIBS} ${OpenCV_LIBS})
+
+add_executable(fun3_encode fun3_encode.cpp)
+target_link_libraries (fun3_encode ${FF_LIBS} ${OpenCV_LIBS})

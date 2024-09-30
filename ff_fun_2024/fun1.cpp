@@ -40,25 +40,24 @@ int main(int argc, char **argv) {
 
     // Open the video file
     AVFormatContext *pFormatCtx = nullptr;
-    CV_Assert(avformat_open_input(&pFormatCtx, fileName.c_str(), nullptr, nullptr) == 0);
+    CV_Assert(0 == avformat_open_input(&pFormatCtx, fileName.c_str(), nullptr, nullptr));
+    cout << pFormatCtx->iformat->name << " " << pFormatCtx->duration << " " << pFormatCtx->bit_rate << endl;
 
     // Retrieve stream info
-    CV_Assert(avformat_find_stream_info(pFormatCtx, nullptr) == 0);
+    CV_Assert(0 <= avformat_find_stream_info(pFormatCtx, nullptr));
 
-    // Dump stream info to stderr (apparently)
+    // Dump the stream info
     av_dump_format(pFormatCtx, 0, fileName.c_str(), 0);
-
-    this_thread::sleep_for(chrono::milliseconds(50)); // To avoid cout mixing with cerr
-    cout << "===\nNumber of streams = " << pFormatCtx->nb_streams << endl;
+    this_thread::sleep_for(chrono::milliseconds(30)); // To avoid cout mixing with cerr
+    cout << "Number of streams = " << pFormatCtx->nb_streams << endl;
 
     // Stream info
     int audioStream = -1, videoStream = -1;
     for (int i = 0; i < pFormatCtx->nb_streams; ++i) {
-        AVCodecParameters *cpar = pFormatCtx->streams[i]->codecpar;
-        cout << i << " : " << deFourCC(cpar->codec_tag) << endl;
-        if (cpar->codec_type == AVMEDIA_TYPE_AUDIO)
+        cout << i << " : " << deFourCC(pFormatCtx->streams[i]->codecpar->codec_tag) << endl;
+        if (pFormatCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO)
             audioStream = i;
-        else if (cpar->codec_type == AVMEDIA_TYPE_VIDEO)
+        else if (pFormatCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
             videoStream = i;
     }
     cout << "audioStream = " << audioStream << endl;
@@ -80,10 +79,13 @@ int main(int argc, char **argv) {
     // Create decoder context
     AVCodecContext *pCodecCtx = avcodec_alloc_context3(pCodec);
     CV_Assert(pCodecCtx);
-    CV_Assert(avcodec_parameters_to_context(pCodecCtx, pCodecPar) >= 0);
-    CV_Assert(avcodec_open2(pCodecCtx, pCodec, nullptr) >= 0);
+    CV_Assert(0 <= avcodec_parameters_to_context(pCodecCtx, pCodecPar));
+    // Open codec
+    CV_Assert(0 <= avcodec_open2(pCodecCtx, pCodec, nullptr));
+
 
     //------------- FRAME
+
     // Frame size
     int frWidth = pCodecCtx->width;
     int frHeight = pCodecCtx->height;
@@ -95,14 +97,20 @@ int main(int argc, char **argv) {
 
     // Decoder frame, for some kind of YuV
     AVFrame *pFrame = av_frame_alloc();
-    CV_Assert(pFrame);
 
-    // RGB frame + buffer
+    // BGR frame + buffer
     AVFrame *pFrameBGR = av_frame_alloc();
-    CV_Assert(pFrameBGR);
-    uint8_t *buffer = static_cast<uint8_t *>(av_malloc(bufSize));
-    CV_Assert(av_image_fill_arrays(pFrameBGR->data, pFrameBGR->linesize, buffer, AV_PIX_FMT_BGR24, frWidth, frHeight,
-                                   1) >= 0);
+    CV_Assert(pFrame && pFrameBGR);
+
+//    uint8_t *buffer = (uint8_t *) av_malloc(bufSize);
+//    CV_Assert(buffer);
+//    CV_Assert(0 <=
+//              av_image_fill_arrays(pFrameBGR->data, pFrameBGR->linesize, buffer, AV_PIX_FMT_BGR24, frWidth, frHeight,
+//                                   1));
+    pFrameBGR->format = AV_PIX_FMT_BGR24;
+    pFrameBGR->width = frWidth;
+    pFrameBGR->height = frHeight;
+    CV_Assert(0 <= av_frame_get_buffer(pFrameBGR, 0));
 
     // SWScale context to convert YUV -> BGR
     cout << "Decoder pixel format = " << pCodecCtx->pix_fmt << " = " << AV_PIX_FMT_YUV420P << endl;
@@ -123,29 +131,25 @@ int main(int argc, char **argv) {
             break;
         }
         CV_Assert(ret >= 0);
-//        cout << "Packet !" << endl;
+//        cout << "Packet ! " << frameCount << endl;
 
         if (packet.stream_index == videoStream) {
             // Send to decoder
-            CV_Assert(avcodec_send_packet(pCodecCtx, &packet) == 0);
+            CV_Assert(0 == avcodec_send_packet(pCodecCtx, &packet));
 
             // Receive frames decoded from the packet, can be 0, 1 or more per packet
             for (;;) {
                 int err = avcodec_receive_frame(pCodecCtx, pFrame);
-                if (err == AVERROR(EAGAIN)) {
-                    // No more frames for now
+                if (err == AVERROR(EAGAIN))
                     break;
-                } else if (err) {
+                else if (err)
                     throw runtime_error("avcodec_receive_frame() failure, err = " + to_string(err));
-                }
 
                 ++frameCount;
-//                cout << "FRAME " << frameCount << endl;
 
                 // Rescale the frame to RGB with SWS
                 sws_scale(swsCtx, (uint8_t const *const *) pFrame->data, pFrame->linesize, 0, frHeight, pFrameBGR->data,
                           pFrameBGR->linesize);
-
                 // Display the frame with OpenCV
                 memcpy(img.data, *pFrameBGR->data, (size_t) bufSize);
                 imshow("img", img);
@@ -163,11 +167,12 @@ int main(int argc, char **argv) {
     //------------- SHUTDOWN
     cout << "\nSHUTTING DOWN !\n" << endl;
     sws_freeContext(swsCtx);
-    av_free(buffer);
-    av_frame_free(&pFrameBGR);
+//    av_free(buffer);
     av_frame_free(&pFrame);
+    av_frame_free(&pFrameBGR);
     avcodec_free_context(&pCodecCtx);
     avformat_close_input(&pFormatCtx);
+
     return 0;
 }
 //======================================================================================================================
