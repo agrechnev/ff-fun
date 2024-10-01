@@ -212,8 +212,6 @@ int main() {
 
     Rescaler rescaler{FRAME_WIDTH, FRAME_HEIGHT, AV_PIX_FMT_YUV420P};
     Encoder encoder{FRAME_WIDTH, FRAME_HEIGHT, AV_CODEC_ID_H264, AV_PIX_FMT_YUV420P};
-//    auto tmp = encoder.getPCodecCtx();
-//    MuxerOneVideoStream muxer{"idiot.mkv", encoder.getPCodecCtx()};
     MuxerOneVideoStream muxer{"idiot.avi", encoder.getPCodecCtx()};
     encoder.setPacketCb([&muxer](AVPacket *pPacket) -> void {
         cout << "Packet pts=" << pPacket->pts << ", size=" << pPacket->size << endl;
